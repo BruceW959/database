@@ -11,12 +11,16 @@ import cn.edu.sustech.cs307.service.CourseService;
 import javax.annotation.Nullable;
 import java.sql.*;
 import java.time.DayOfWeek;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
 public class ReferenceCourseService implements CourseService {
     public String addPre(Prerequisite p){
+        if(p==null){
+            return null;
+        }
         String pre=p.when(new Prerequisite.Cases<>() {
             StringBuilder temp;
 
@@ -311,12 +315,12 @@ public class ReferenceCourseService implements CourseService {
 
             while(rs.next()){
                 CourseSectionClass csc=new CourseSectionClass();
-                csc.id=rs.getInt(1);
+                csc.id=rs.getInt(1);//1
                 Instructor i=new Instructor();
                 i.id=rs.getInt(9);
                 i.fullName=rs.getString(12);
-                csc.instructor=i;
-                csc.dayOfWeek=DayOfWeek.of(rs.getInt(4));
+                csc.instructor=i;//2
+                csc.dayOfWeek=DayOfWeek.of(rs.getInt(4));//3
                 List<Short> weekList=new LinkedList<>();
                 int wl=rs.getInt(5);
                 int index=0;
@@ -328,8 +332,46 @@ public class ReferenceCourseService implements CourseService {
                         weekList.add((short)index);
                     }
                 }
-                csc.weekList=weekList;
+                csc.weekList=weekList;//4
+                csc.classBegin=(short)rs.getInt(6);
+                csc.classEnd=(short)rs.getInt(7);
+                csc.location=rs.getString(8);
+                cscList.add(csc);
+            }
+            return cscList;
+        }catch (SQLException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally{
+            try {
+                if (rs != null)
+                    rs.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
 
+        return null;
+    }
+
+    @Override
+    public CourseSection getCourseSectionByClass(int classId) {
+        ResultSet rs = null;
+        try{
+            Connection connection = SQLDataSource.getInstance().getSQLConnection();
+            PreparedStatement stmt = connection.prepareStatement("select * from course_section where id=(select distinct section_id from course_section_class where id=?)", Statement.RETURN_GENERATED_KEYS);
+            stmt.setInt(1,classId);
+
+            rs=stmt.executeQuery();
+
+            if(rs.next()){
+                CourseSection cs=new CourseSection();
+                cs.id=rs.getInt(1);
+                cs.name=rs.getString(4);
+                cs.totalCapacity=rs.getInt(5);
+                cs.leftCapacity=rs.getInt(6);
+                return cs;
             }
 
         }catch (SQLException e) {
@@ -346,16 +388,63 @@ public class ReferenceCourseService implements CourseService {
         }
         return null;
     }
-
-    @Override
-    public CourseSection getCourseSectionByClass(int classId) {
-        return null;
-    }
-
     @Override
     public List<Student> getEnrolledStudentsInSemester(String courseId, int semesterId) {
+        List<Student> studentList=new LinkedList<>();
+        ResultSet rs = null;
+        try{
+            Connection connection = SQLDataSource.getInstance().getSQLConnection();
+            PreparedStatement stmt = connection.prepareStatement("select d.id,full_name,enrolled_date,major_id , name, d_id, d_name from\n" +
+                    "              (((select distinct student_id from course_student_grade a join (select * from course_section where course_id = ? and semester_id = ?) b\n" +
+                    "    on a.course_section_id=b.id) c join student on c.student_id=student.id )d join (select major.id ,major.name,d2.id as d_id ,d2.name as d_name from major join department d2 on major.department_id = d2.id)e on d.major_id=e.id);", Statement.RETURN_GENERATED_KEYS);
+            stmt.setString(1,courseId);
+            stmt.setInt(2,semesterId);
+
+            rs=stmt.executeQuery();
+
+            HashMap<Integer,Major> majors=new HashMap<>();
+            HashMap<Integer,Department> departments=new HashMap<>();
+
+            while(rs.next()){
+                Student s=new Student();
+                s.id=rs.getInt(1);//1
+                s.fullName=rs.getString(2);//2
+                s.enrolledDate=rs.getDate(3);//3
+                if(!majors.containsKey(rs.getInt(4))){
+                    Major m=new Major();
+                    m.id=rs.getInt(4);
+                    m.name=rs.getString(5);
+                    if(!departments.containsKey(rs.getInt(7))){
+                        Department d=new Department();
+                        d.id=rs.getInt(7);
+                        d.name=rs.getString(8);
+                        m.department=d;
+                        departments.put(d.id,d);
+                    }else{
+                        m.department=departments.get(rs.getInt(7));
+                    }
+                    majors.put(m.id,m);
+                    s.major=m;//4
+                }else{
+                    s.major=majors.get(rs.getInt(4));//4
+                }
+                studentList.add(s);
+            }
+            return studentList;
+
+        }catch (SQLException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally{
+            try {
+                if (rs != null)
+                    rs.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
         return null;
     }
-
 
 }
