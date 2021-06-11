@@ -4,6 +4,7 @@ import cn.edu.sustech.cs307.dto.*;
 import cn.edu.sustech.cs307.dto.grade.Grade;
 import cn.edu.sustech.cs307.dto.grade.HundredMarkGrade;
 import cn.edu.sustech.cs307.dto.grade.PassOrFailGrade;
+import cn.edu.sustech.cs307.exception.EntityNotFoundException;
 import cn.edu.sustech.cs307.exception.IntegrityViolationException;
 import cn.edu.sustech.cs307.service.StudentService;
 
@@ -46,7 +47,35 @@ public class ReferenceStudentService implements StudentService {
 
     @Override
     public EnrollResult enrollCourse(int studentId, int sectionId) {
+        ResultSet rst ;
+        try (Connection conn = SQLDataSource.getInstance().getSQLConnection();
+             PreparedStatement stmt = conn.prepareStatement("select enrollcourse(?, ?)")){
+            stmt.setInt(1,studentId);
+            stmt.setInt(2,sectionId);
+            rst = stmt.executeQuery();
+            while(rst.next()){
+                int judge = rst.getInt(1);
+                switch (judge) {
+                    case 0:
+                        return EnrollResult.UNKNOWN_ERROR;
+                    case 1:
+                        return EnrollResult.COURSE_NOT_FOUND;
+                    case 2:
+                        return EnrollResult.COURSE_IS_FULL;
+                    case 3:
+                        return EnrollResult.ALREADY_ENROLLED;
+                    case 4:
+                        return EnrollResult.ALREADY_PASSED;
+                    case 6:
+                        return EnrollResult.COURSE_CONFLICT_FOUND;
+                    default:
 
+                        return EnrollResult.SUCCESS;
+                }
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -160,8 +189,83 @@ public class ReferenceStudentService implements StudentService {
     public Map<Course, Grade> getEnrolledCoursesAndGrades(int studentId,
                                                           @Nullable Integer semesterId) {
         Map<Course, Grade> map = new HashMap<>();
+        ResultSet rst = null;
+        PreparedStatement stmt = null;
+        try(Connection conn = SQLDataSource.getInstance().getSQLConnection()){
+            if(semesterId != null){
+                stmt = conn.prepareStatement("select * from SearchCourse(? , ?) as(grade int , course_id varchar ,course_name varchar ,course_credit int,course_hour int,is_pf_grading boolean)");
+                stmt.setInt(1,studentId);
+                stmt.setInt(2,semesterId);
+                rst = stmt.executeQuery();
+                while(rst.next()){
+                    Course course = new Course();
+                    Grade course_grade;
+                    int grade = rst.getInt(1);
+                    course.id = rst.getString(2);
+                    course.name = rst.getString(3);
+                    course.credit = rst.getInt(4);
+                    course.classHour = rst.getInt(5);
+                    course.grading = rst.getBoolean(6)? Course.CourseGrading.PASS_OR_FAIL : Course.CourseGrading.HUNDRED_MARK_SCORE;
+                    if (rst.wasNull()) {
+                        throw new EntityNotFoundException();
+                    }
+                    switch(grade){
+                        case -1:
+                            course_grade = PassOrFailGrade.PASS;
+                            break;
+                        case -2:
+                            course_grade = PassOrFailGrade.FAIL;
+                            break;
+                        default:
+                            course_grade = new HundredMarkGrade((short) grade);
+                            break;
+                    }
+                    map.put(course , course_grade);
+                }
 
-        return null;
+
+            }else{
+                stmt = conn.prepareStatement("select * from SearchCoursenoSem(?) as (grade int , course_id varchar ,course_name varchar ,course_credit int,course_hour int,is_pf_grading boolean)");
+                stmt.setInt(1,studentId);
+                rst = stmt.executeQuery();
+                while(rst.next()){
+                    Course course = new Course();
+                    Grade course_grade;
+                    int grade = rst.getInt(1);
+                    course.id = rst.getString(2);
+                    course.name = rst.getString(3);
+                    course.credit = rst.getInt(4);
+                    course.classHour = rst.getInt(5);
+                    course.grading = rst.getBoolean(6)? Course.CourseGrading.PASS_OR_FAIL : Course.CourseGrading.HUNDRED_MARK_SCORE;
+                    if (rst.wasNull()) {
+                        throw new EntityNotFoundException();
+                    }
+                    switch(grade){
+                        case -1:
+                            course_grade = PassOrFailGrade.PASS;
+                            break;
+                        case -2:
+                            course_grade = PassOrFailGrade.FAIL;
+                            break;
+                        default:
+                            course_grade = new HundredMarkGrade((short) grade);
+                            break;
+                    }
+                    map.put(course , course_grade);
+                }
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+        }finally {
+            try{
+                assert rst != null;
+                rst.close();
+                stmt.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return map;
     }
 
     @Override
@@ -212,7 +316,45 @@ public class ReferenceStudentService implements StudentService {
 
     @Override
     public boolean passedPrerequisitesForCourse(int studentId, String courseId) {
-        return false;
+        ResultSet rst;
+        boolean judge = false;
+        try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
+            PreparedStatement stmt1 = conn.prepareStatement("select * from turn_prerequisite(? , ?) as (is_exist bool , section_id int)");
+            ){
+            String[] Prerequisites = courseId.split("\\|");
+            Stack<Boolean> pass = new Stack<>();
+            for (String prerequisite : Prerequisites) {
+                if (!prerequisite.equals("AND") && !prerequisite.equals("OR")) {
+                    stmt1.setInt(1, studentId);
+                    stmt1.setString(2, prerequisite);
+                    rst = stmt1.executeQuery();
+                    if (!rst.getBoolean(1)) {
+                        throw new IntegrityViolationException();
+                    } else {
+                        int grade = rst.getInt(2);
+                        if (grade >= 60 || grade == -1) {
+                            pass.add(true);
+                        } else {
+                            pass.add(false);
+                        }
+                    }
+                } else if (prerequisite.equals("AND")) {
+                    boolean b1 = pass.pop();
+                    boolean b2 = pass.pop();
+                    boolean b3 = b1 & b2;
+                    pass.add(b3);
+                } else {
+                    boolean b1 = pass.pop();
+                    boolean b2 = pass.pop();
+                    boolean b3 = b1 | b2;
+                    pass.add(b3);
+                }
+            }
+            judge = pass.pop();
+        }catch (SQLException e){
+            e.printStackTrace();
+        }
+        return judge;
     }
 
     @Override
