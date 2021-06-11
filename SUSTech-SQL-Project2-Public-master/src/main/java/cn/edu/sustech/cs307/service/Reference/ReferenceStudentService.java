@@ -9,9 +9,9 @@ import cn.edu.sustech.cs307.service.StudentService;
 
 import javax.annotation.Nullable;
 import java.sql.*;
+import java.sql.Date;
 import java.time.DayOfWeek;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 public class ReferenceStudentService implements StudentService {
@@ -76,9 +76,9 @@ public class ReferenceStudentService implements StudentService {
 
     @Override
     public void addEnrolledCourseWithGrade(int studentId, int sectionId, @Nullable Grade grade) {
+        ResultSet rst = null;
         try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
-            PreparedStatement stmt = conn.prepareStatement("insert into course_student_grade(student_id , course_section_id , grade)value(?,?,?)"
-                    +"ON conflict(student_id , course_section_id , grade)  DO NOTHING;")
+            PreparedStatement stmt = conn.prepareStatement("select addEnrolledCourseWithGrade(?, ? ,?)")
         ){
             Grade.Cases<Short> cases = new Grade.Cases<Short>() {
                 @Override
@@ -94,20 +94,32 @@ public class ReferenceStudentService implements StudentService {
                     return self.mark;
                 }
             };
-            if()
             stmt.setInt(1, studentId);
             stmt.setInt(2, sectionId);
             stmt.setInt(3, grade.when(cases));
-            stmt.execute();
+            rst = stmt.executeQuery();
+            if(rst.next()){
+                if(!rst.getBoolean(1)){
+                    throw new IntegrityViolationException();
+                }
+            }
         }catch (SQLException e){
             e.printStackTrace();
+        }finally {
+            try{
+                assert rst != null;
+                rst.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
         }
     }
 
     @Override
     public void setEnrolledCourseGrade(int studentId, int sectionId, Grade grade) {
+        ResultSet rst = null;
         try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
-            PreparedStatement stmt = conn.prepareStatement("update course_student_grade set grade = ? where student_id = ? and course_section_id = ?")
+            PreparedStatement stmt = conn.prepareStatement("select setEnrolledCourseWithGrade(?, ? ,?)")
             ){
             Grade.Cases<Short> cases = new Grade.Cases<Short>() {
                 @Override
@@ -126,23 +138,76 @@ public class ReferenceStudentService implements StudentService {
             stmt.setInt(2, studentId);
             stmt.setInt(3, sectionId);
             stmt.setInt(1, grade.when(cases));
-            stmt.execute();
+            rst = stmt.executeQuery();
+            if(rst.next()){
+                if(!rst.getBoolean(1)){
+                    throw new IntegrityViolationException();
+                }
+            }
         }catch (SQLException e){
             e.printStackTrace();
+        }finally {
+            try{
+                assert rst != null;
+                rst.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
         }
     }
 
     @Override
     public Map<Course, Grade> getEnrolledCoursesAndGrades(int studentId,
                                                           @Nullable Integer semesterId) {
+        Map<Course, Grade> map = new HashMap<>();
 
         return null;
     }
 
     @Override
     public CourseTable getCourseTable(int studentId, Date date) {
-
-        return null;
+        ResultSet rst = null;
+        CourseTable courseTable = new CourseTable();
+        courseTable.table = new HashMap<>();
+        courseTable.table.put(DayOfWeek.MONDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.TUESDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.WEDNESDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.THURSDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.FRIDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.SATURDAY, new HashSet<>());
+        courseTable.table.put(DayOfWeek.SUNDAY, new HashSet<>());
+        Instructor instructor = new Instructor();
+        CourseTable.CourseTableEntry courseTableEntry = new CourseTable.CourseTableEntry();
+        try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
+            PreparedStatement stmt = conn.prepareStatement("select * from getCourseTable(? , ?) as (full_name varchar ,class_begin integer ,class_end integer ,location varchar ,instructor_id int ,instructor_name varchar ,day_of_week integer )")
+        ){
+            stmt.setInt(1,studentId);
+            stmt.setDate(2,date);
+            rst = stmt.executeQuery();
+            while(rst.next()){
+                courseTableEntry = new CourseTable.CourseTableEntry();
+                instructor = new Instructor();
+                courseTableEntry.courseFullName = rst.getString(1);;
+                courseTableEntry.classBegin = rst.getShort(2);
+                courseTableEntry.classEnd = rst.getShort(3);
+                courseTableEntry.location = rst.getString(4);
+                instructor.id = rst.getInt(5);
+                instructor.fullName = rst.getString(6);
+                courseTableEntry.instructor = instructor;
+                int day_of_week = rst.getInt(7);
+                courseTable.table.get(DayOfWeek.of(day_of_week)).add(courseTableEntry);
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }finally {
+            try{
+                assert rst != null;
+                rst.close();
+            } catch (SQLException throwables) {
+                throwables.printStackTrace();
+            }
+        }
+        return courseTable;
     }
 
     @Override

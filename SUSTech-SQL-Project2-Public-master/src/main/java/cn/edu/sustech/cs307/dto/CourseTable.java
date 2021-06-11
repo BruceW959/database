@@ -3,6 +3,8 @@ package cn.edu.sustech.cs307.dto;
 import java.time.DayOfWeek;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 
 public class CourseTable {
@@ -29,5 +31,22 @@ public class CourseTable {
      * Stores all courses(encapsulated by CourseTableEntry) according to DayOfWeek.
      * The key should always be from MONDAY to SUNDAY, if the student has no course for any of the days, put an empty list.
      */
-    public Map<DayOfWeek, List<CourseTableEntry>> table;
+    public Map<DayOfWeek, Set<CourseTableEntry>> table;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        CourseTable that = (CourseTable) o;
+        return table.equals(that.table);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(table);
+    }
 }
