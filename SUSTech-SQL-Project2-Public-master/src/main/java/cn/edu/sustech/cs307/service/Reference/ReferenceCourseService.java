@@ -11,10 +11,7 @@ import cn.edu.sustech.cs307.service.CourseService;
 import javax.annotation.Nullable;
 import java.sql.*;
 import java.time.DayOfWeek;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class ReferenceCourseService implements CourseService {
     public String addPre(Prerequisite p){
@@ -85,8 +82,8 @@ public class ReferenceCourseService implements CourseService {
         ResultSet rs = null;
         int sectionId=-1;
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("insert into course_section (course_id, semester_id, name, total_capacity, left_capacity) " +
-                     " VALUES(?,?,?,?,?)" , Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("insert into course_section (id ,course_id, semester_id, name, total_capacity, left_capacity) " +
+                     " VALUES(DEFAULT ,?,?,?,?,?)" , Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, courseId);
             stmt.setInt(2, semesterId);
             stmt.setString(3, sectionName);
@@ -102,9 +99,7 @@ public class ReferenceCourseService implements CourseService {
         } catch (SQLException e) {
             e.printStackTrace();
         }catch (Exception e) {
-            System.out.println("section_Exception异常↓");
             e.printStackTrace();
-            System.out.println("section_Exception异常↑");
         } finally{
 
             try {
@@ -118,7 +113,7 @@ public class ReferenceCourseService implements CourseService {
     }
 
     @Override
-    public int addCourseSectionClass(int sectionId, int instructorId, DayOfWeek dayOfWeek, List<Short> weekList, short classStart, short classEnd, String location) {
+    public int addCourseSectionClass(int sectionId, int instructorId, DayOfWeek dayOfWeek, Set<Short> weekList, short classStart, short classEnd, String location) {
         ResultSet rs = null;
         int sectionClassId=-1;
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
@@ -145,9 +140,7 @@ public class ReferenceCourseService implements CourseService {
         } catch (SQLException e) {
             e.printStackTrace();
         }catch (Exception e) {
-            System.out.println("section_Exception异常↓");
             e.printStackTrace();
-            System.out.println("section_Exception异常↑");
         } finally{
 
             try {
@@ -234,8 +227,6 @@ public class ReferenceCourseService implements CourseService {
 
         }catch (SQLException e) {
             e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         return courseList;
     }
@@ -261,8 +252,6 @@ public class ReferenceCourseService implements CourseService {
             }
 
         }catch (SQLException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
             e.printStackTrace();
         }
         return courseSectionList;
@@ -290,8 +279,6 @@ public class ReferenceCourseService implements CourseService {
             }
 
         }catch (SQLException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
             e.printStackTrace();
         }finally{
             try {
@@ -323,10 +310,9 @@ public class ReferenceCourseService implements CourseService {
                 i.fullName=rs.getString(12);
                 csc.instructor=i;//2
                 csc.dayOfWeek=DayOfWeek.of(rs.getInt(4));//3
-                List<Short> weekList=new LinkedList<>();
+                Set<Short> weekList=new HashSet<>();
                 int wl=rs.getInt(5);
                 int index=0;
-
                 while(wl>0){
                     index++;
                     wl/=2;
@@ -342,8 +328,6 @@ public class ReferenceCourseService implements CourseService {
             }
             return cscList;
         }catch (SQLException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
             e.printStackTrace();
         }finally{
             try {
@@ -377,8 +361,6 @@ public class ReferenceCourseService implements CourseService {
             }
 
         }catch (SQLException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
             e.printStackTrace();
         }finally{
             try {
@@ -435,8 +417,6 @@ public class ReferenceCourseService implements CourseService {
             return studentList;
 
         }catch (SQLException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
             e.printStackTrace();
         }finally{
             try {

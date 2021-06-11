@@ -25,7 +25,7 @@ public class ReferenceUserServices implements UserService {
     public List<User> getAllUsers(){
         List<User> users = new LinkedList<>();
         try (Connection conn = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = conn.prepareStatement("select * from getusers() as (is_student, id, full_name, enroll_date , major_id , major_name , department_id , department_name);");
+             PreparedStatement stmt = conn.prepareStatement("select * from getusers() as ( is_student bool, id int , full_name varchar , enroll_date date , major_id int , major_name varchar , department_id int , department_name varchar )");
              ResultSet rst = stmt.executeQuery()){
             while(rst.next()){
                 if(rst.getBoolean(1)){
@@ -70,7 +70,7 @@ public class ReferenceUserServices implements UserService {
         User user = null;
         ResultSet rst = null;
         try (Connection conn = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = conn.prepareStatement("searchusers(?) as is_student(bool) , id(int), fullname(varchar), enroll_date(date), major_id(int), major_name(int), department_id(int), department_name(varchar)"))
+             PreparedStatement stmt = conn.prepareStatement("select * from searchusers(?) as (is_student bool , id int, fullname varchar , enroll_date date , major_id int , major_name int , department_id int , department_name varchar)"))
              {
                  stmt.setInt(1,userId);
                  rst = stmt.executeQuery();
