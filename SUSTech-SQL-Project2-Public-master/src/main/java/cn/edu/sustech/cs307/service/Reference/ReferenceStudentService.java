@@ -183,50 +183,41 @@ public class ReferenceStudentService implements StudentService {
 
     @Override
     public EnrollResult enrollCourse(int studentId, int sectionId) {
-        ResultSet rst0 = null;
         ResultSet rst = null;
         try (Connection conn = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt0 = conn.prepareStatement("select course_id from course_section where id = ?");
-             PreparedStatement stmt = conn.prepareStatement("select enrollcourse(?, ?)")){
-            stmt0.setInt(1,sectionId);
-            rst0 = stmt0.executeQuery();
-            while(rst0.next()){
-                String course_id = rst0.getString(1);
-                if(passedPrerequisitesForCourse(studentId, course_id)){
-                    stmt.setInt(1,studentId);
-                    stmt.setInt(2,sectionId);
-                    rst = stmt.executeQuery();
-                    while(rst.next()){
-                        int judge = rst.getInt(1);
-                        switch (judge) {
-                            case 0:
-                                return EnrollResult.UNKNOWN_ERROR;
-                            case 1:
-                                return EnrollResult.COURSE_NOT_FOUND;
-                            case 2:
-                                return EnrollResult.COURSE_IS_FULL;
-                            case 3:
-                                return EnrollResult.ALREADY_ENROLLED;
-                            case 4:
-                                return EnrollResult.ALREADY_PASSED;
-                            case 5:
-                                return EnrollResult.COURSE_CONFLICT_FOUND;
-                            default:
-                                return EnrollResult.SUCCESS;
-                        }
-                    }
-                }else{
-                    return EnrollResult.PREREQUISITES_NOT_FULFILLED;
+             PreparedStatement stmt = conn.prepareStatement("select enrollcourse(?, ?)")) {
+            stmt.setInt(1,studentId);
+            stmt.setInt(2,sectionId);
+            rst = stmt.executeQuery();
+            while (rst.next()) {
+                int judge = rst.getInt(1);
+                switch (judge) {
+                    case 0:
+                        return EnrollResult.UNKNOWN_ERROR;
+                    case 1:
+                        return EnrollResult.COURSE_NOT_FOUND;
+                    case 2:
+                        return EnrollResult.COURSE_IS_FULL;
+                    case 3:
+                        return EnrollResult.ALREADY_ENROLLED;
+                    case 4:
+                        return EnrollResult.ALREADY_PASSED;
+                    case 5:
+                        return EnrollResult.PREREQUISITES_NOT_FULFILLED;
+                    case 6:
+                        return EnrollResult.COURSE_CONFLICT_FOUND;
+                    default:
+                        return EnrollResult.SUCCESS;
                 }
             }
-        }catch (SQLException e){
-            return EnrollResult.UNKNOWN_ERROR;
-        }finally {
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        } finally {
             try {
+                assert rst != null;
                 rst.close();
-                rst0.close();
-            } catch (SQLException throwables) {
-                return EnrollResult.UNKNOWN_ERROR;
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
         }
         return EnrollResult.UNKNOWN_ERROR;
@@ -236,7 +227,7 @@ public class ReferenceStudentService implements StudentService {
     public void dropCourse(int studentId, int sectionId) throws IllegalStateException {
         ResultSet rst = null;
         try (Connection conn = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = conn.prepareStatement("select drop_course(?, ?)")){
+             PreparedStatement stmt = conn.prepareStatement("select dropcourse(?, ?)")){
             stmt.setInt(1,studentId);
             stmt.setInt(2,sectionId);
             rst = stmt.executeQuery();
@@ -245,15 +236,9 @@ public class ReferenceStudentService implements StudentService {
                     throw new IllegalStateException();
                 }
             }
+            rst.close();
         } catch (SQLException e) {
             e.printStackTrace();
-        }finally {
-            try {
-                assert rst != null;
-                rst.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
     }
 
@@ -468,53 +453,22 @@ public class ReferenceStudentService implements StudentService {
 
     @Override
     public boolean passedPrerequisitesForCourse(int studentId, String courseId) {
-        ResultSet rst0 = null;
         ResultSet rst = null;
         boolean judge = false;
         try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
-            PreparedStatement stmt0 = conn.prepareStatement("select prerequisite from prerequisite where course_id = ?");
-            PreparedStatement stmt1 = conn.prepareStatement("select * from turn_prerequisite(? , ?) as (is_exist bool , section_id int)");
+            PreparedStatement stmt = conn.prepareStatement("select judge_prerequisite(? , ?)")
             ){
-            stmt0.setString(1,courseId);
-            rst0 = stmt0.executeQuery();
-            rst0.next();
-            String prerequisitekk = rst0.getString(1);
-            String[] Prerequisites = prerequisitekk.split("\\|");
-            Stack<Boolean> pass = new Stack<>();
-            for (String prerequisite : Prerequisites) {
-                if (!prerequisite.equals("AND") && !prerequisite.equals("OR")) {
-                    stmt1.setInt(1, studentId);
-                    stmt1.setString(2, prerequisite);
-                    rst = stmt1.executeQuery();
-                    if (!rst.getBoolean(1)) {
-                        throw new IntegrityViolationException();
-                    } else {
-                        int grade = rst.getInt(2);
-                        if (grade >= 60 || grade == -1) {
-                            pass.add(true);
-                        } else {
-                            pass.add(false);
-                        }
-                    }
-                } else if (prerequisite.equals("AND")) {
-                    boolean b1 = pass.pop();
-                    boolean b2 = pass.pop();
-                    boolean b3 = b1 & b2;
-                    pass.add(b3);
-                } else {
-                    boolean b1 = pass.pop();
-                    boolean b2 = pass.pop();
-                    boolean b3 = b1 | b2;
-                    pass.add(b3);
-                }
-            }
-            judge = pass.pop();
+            stmt.setInt(1,studentId);
+            stmt.setString(2,courseId);
+            rst = stmt.executeQuery();
+            rst.next();
+            judge = rst.getBoolean(1);
         }catch (SQLException e){
             e.printStackTrace();
         }finally {
             try {
+                assert rst != null;
                 rst.close();
-                rst0.close();
             } catch (SQLException throwables) {
                 throwables.printStackTrace();
             }

@@ -22,17 +22,20 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.DayOfWeek;
 import java.util.*;
+import java.sql.*;
 
 public class Main {
     public static void main(String[] args) throws ParseException {
         ServiceFactory serviceFactory = Config.getServiceFactory();
         assert serviceFactory != null;
-/*        InstructorService instructorService = serviceFactory.createService(InstructorService.class);
+        InstructorService instructorService = serviceFactory.createService(InstructorService.class);
         MajorService majorService = serviceFactory.createService(MajorService.class);
         DepartmentService departmentService = serviceFactory.createService(DepartmentService.class);
         SemesterService semesterService = serviceFactory.createService(SemesterService.class);
         UserService userService = serviceFactory.createService(UserService.class);
-        CourseService courseService=serviceFactory.createService(CourseService.class);
+        CourseService courseService= serviceFactory.createService(CourseService.class);
+        StudentService studentService = serviceFactory.createService(StudentService.class);
+        studentService.enrollCourse(11710581,8);
 
         //List<User> users = new LinkedList<>();
         //users = userService.getAllUsers();
@@ -46,7 +49,7 @@ public class Main {
         ));
         Prerequisite algebra = new CoursePrerequisite("MA103A");
         Prerequisite prerequisite = new AndPrerequisite(List.of(calculus, algebra));
-        courseService.addCourse("CS205","c++",3,64, Course.CourseGrading.HUNDRED_MARK_SCORE,prerequisite);
+        //courseService.addCourse("CS205","c++",3,64, Course.CourseGrading.HUNDRED_MARK_SCORE,prerequisite);
         //courseService.addCourseSection("CS205",1,"中文一班",120);
         List<Short> weekList=new LinkedList<>();
         weekList.add((short)1);
