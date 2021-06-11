@@ -76,6 +76,7 @@ public class ReferenceStudentService implements StudentService {
         }catch (SQLException e){
             e.printStackTrace();
         }
+        return null;
     }
 
     @Override

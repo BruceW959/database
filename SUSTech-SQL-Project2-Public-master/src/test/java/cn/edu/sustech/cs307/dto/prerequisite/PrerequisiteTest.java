@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class PrerequisiteTest {
     @Test
+
     public void testTransformation() {
         Prerequisite calculus = new OrPrerequisite(List.of(
                 new CoursePrerequisite("MA101A"),
