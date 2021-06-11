@@ -42,8 +42,144 @@ public class ReferenceStudentService implements StudentService {
                                                 @Nullable List<String> searchClassLocations, CourseType searchCourseType,
                                                 boolean ignoreFull, boolean ignoreConflict, boolean ignorePassed,
                                                 boolean ignoreMissingPrerequisites, int pageSize, int pageIndex) {
-        return null;
+        List<CourseSearchEntry>courseSearchResult = new LinkedList<>();
+        ResultSet rst=null;
+        try {Connection conn = SQLDataSource.getInstance().getSQLConnection();
+            PreparedStatement pStmt = conn.prepareStatement("select * from search_course(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) as (course_id varchar, course_name varchar, credit int, class_hour int, is_pf_grading bool, section_id int, section_name varchar, total_capacity int, left_capacity int,  class_id int, ins_id int, ins_name varchar, day_of_week int, week_list int, class_begin int, class_end int, location varchar)");
+
+            //sql = "select * from search_course(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) as (course_id varchar, course_name varchar, credit int, class_hour int, is_pf_grading bool, section_id int, section_name varchar, total_capacity int, left_capacity int,  class_id int, ins_id int, ins_name varchar, day_of_week int, week_list int, class_begin int, class_end int, location varchar)";
+
+            //pStmt = conn.prepareStatement(sql);
+            pStmt.setInt(1, studentId);
+            pStmt.setInt(2, semesterId);
+            if (searchCid == null) {
+                pStmt.setNull(3, Types.VARCHAR);
+            } else {
+                pStmt.setString(3, searchCid);
+            }
+            if (searchName == null) {
+                pStmt.setNull(4, Types.VARCHAR);
+            } else {
+                pStmt.setString(4, searchName);
+            }
+            if (searchInstructor == null) {
+                pStmt.setNull(5, Types.VARCHAR);
+            } else {
+                pStmt.setString(5, searchInstructor);
+            }
+            if (searchDayOfWeek == null) {
+                pStmt.setNull(6, Types.INTEGER);
+            } else {
+                pStmt.setInt(6, searchDayOfWeek.getValue());
+            }
+            if (searchClassTime == null) {
+                pStmt.setNull(7, Types.INTEGER);
+            } else {
+                pStmt.setInt(7, searchClassTime);
+            }
+            if (searchClassLocations == null) {
+                pStmt.setNull(8, Types.ARRAY);
+            } else {
+                pStmt.setArray(8,
+                        conn.createArrayOf("varchar", searchClassLocations.toArray(new String[0])));
+            }
+            int sType=0;
+            switch (searchCourseType) {
+                case ALL:
+                    sType = 1;
+                    break;
+                case MAJOR_COMPULSORY:
+                    sType = 2;
+                    break;
+                case MAJOR_ELECTIVE:
+                    sType = 3;
+                    break;
+                case CROSS_MAJOR:
+                    sType = 4;
+                    break;
+                case PUBLIC:
+                    sType = 5;
+                    break;
+            }
+            pStmt.setInt(9, sType);
+            pStmt.setBoolean(10, ignoreFull);
+            pStmt.setBoolean(11, ignoreConflict);
+            pStmt.setBoolean(12, ignorePassed);
+            pStmt.setBoolean(13, ignoreMissingPrerequisites);
+            pStmt.setInt(14, pageSize);
+            pStmt.setInt(15, pageIndex);
+            rst = pStmt.executeQuery();
+            PreparedStatement conflictPStmt = conn.prepareStatement(
+                    "select * from get_all_conflict_sections(?) as (sec_full_name varchar)");
+            if (rst.next()) {
+                boolean stop = false;
+                while (!stop) {
+                    CourseSearchEntry tempEntry = new CourseSearchEntry();
+                    tempEntry.course = new Course();
+                    tempEntry.sectionClasses = new HashSet<>();
+                    tempEntry.section = new CourseSection();
+                    tempEntry.conflictCourseNames = new ArrayList<>();
+                    tempEntry.course.id = rst.getString(1);
+                    tempEntry.course.name = rst.getString(2);
+                    tempEntry.course.credit = rst.getInt(3);
+                    tempEntry.course.classHour = rst.getInt(4);
+                    tempEntry.course.grading =
+                            rst.getBoolean(5) ? Course.CourseGrading.PASS_OR_FAIL : Course.CourseGrading.HUNDRED_MARK_SCORE;
+                    tempEntry.section.id = rst.getInt(6);
+                    tempEntry.section.name = rst.getString(7);
+                    tempEntry.section.totalCapacity = rst.getInt(8);
+                    tempEntry.section.leftCapacity = rst.getInt(9);
+                    conflictPStmt.setInt(1, tempEntry.section.id);
+                    // used in searchCourse()
+                    ResultSet conflictRst = conflictPStmt.executeQuery();
+                    while (conflictRst.next()) {
+                        tempEntry.conflictCourseNames.add(conflictRst.getString(1));
+                    }
+                    conflictRst.close();
+                    while (rst.getInt(6) == tempEntry.section.id) {
+                        CourseSectionClass tempClass = new CourseSectionClass();
+                        tempClass.instructor = new Instructor();
+                        tempClass.weekList = new HashSet<>();
+                        tempClass.id = rst.getInt(10);
+                        tempClass.instructor.id = rst.getInt(11);
+                        tempClass.instructor.fullName = rst.getString(12);
+                        tempClass.dayOfWeek = DayOfWeek.of(rst.getInt(13));
+                        int weekListNum = rst.getInt(14);
+                        Short weekCnt = 0;
+                        while (weekListNum > 0) {
+                            weekCnt++;
+                            if (weekListNum % 2 == 1) {
+                                tempClass.weekList.add(weekCnt);
+                            }
+                            weekListNum >>= 1;
+                        }
+                        tempClass.classBegin = rst.getShort(15);
+                        tempClass.classEnd = rst.getShort(16);
+                        tempClass.location = rst.getString(17);
+                        tempEntry.sectionClasses.add(tempClass);
+                        if (!rst.next()) {
+                            stop = true;
+                            break;
+                        }
+                    }
+                    courseSearchResult.add(tempEntry);
+                }
+            }
+            conflictPStmt.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                rst.close();
+                //pStmt.close();
+                //conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return courseSearchResult;
     }
+
 
     @Override
     public EnrollResult enrollCourse(int studentId, int sectionId) {

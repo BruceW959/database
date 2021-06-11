@@ -3,6 +3,7 @@ package cn.edu.sustech.cs307.dto;
 import java.time.DayOfWeek;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The relationship between {@code CourseSectionClass} with {@code CourseSection} is:
@@ -15,7 +16,7 @@ public class CourseSectionClass {
     public DayOfWeek dayOfWeek;// We ensure the test semesters begin with Monday.
     // the given elements in weekList are sorted.
     // CourseSectionClasses in same courseSection may have different weeklist.
-    public List<Short> weekList;
+    public Set<Short> weekList;
     //the time quantum of start and end.
     //For example: classStart is 3 while classEnd is 4
     public short classBegin, classEnd;
