@@ -60,16 +60,20 @@ public class ReferenceCourseService implements CourseService {
                           Course.CourseGrading grading,
                           @Nullable Prerequisite prerequisite) {
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("INSERT INTO course(courseId, courseCredit, courseHour, courseName, courseDept)" +
-                     " VALUES(DEFAULT,?,?,?,?,?)" +
-                     "ON conflict(courseId)  DO NOTHING;" , Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("insert into course (id,name, credit, class_hour, is_pf_grading)" +
+                     " VALUES(?,?,?,?,?)" +
+                     "ON conflict(id)  DO NOTHING;" , Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, courseId);
             stmt.setString(2, courseName);
             stmt.setInt(3, credit);
             stmt.setInt(4, classHour);
-            stmt.setString(5, grading.toString());
-            stmt.setString(6, addPre(prerequisite));
-            stmt.execute();
+            stmt.setBoolean(5, grading==Course.CourseGrading.PASS_OR_FAIL);
+            PreparedStatement stmt1=connection.prepareStatement("insert into prerequisite (course_id, prerequisite) values (?,?)");
+            stmt1.setString(1,courseId);
+            stmt1.setString(2, addPre(prerequisite));
+            stmt.executeUpdate();
+            stmt1.executeUpdate();
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -82,14 +86,13 @@ public class ReferenceCourseService implements CourseService {
         int sectionId=-1;
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
              PreparedStatement stmt = connection.prepareStatement("insert into course_section (course_id, semester_id, name, total_capacity, left_capacity) " +
-                     " VALUES(?,?,?,?,?)" +
-                     "ON conflict(courseId)  DO NOTHING;" , Statement.RETURN_GENERATED_KEYS)) {
+                     " VALUES(?,?,?,?,?)" , Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, courseId);
             stmt.setInt(2, semesterId);
             stmt.setString(3, sectionName);
             stmt.setInt(4, totalCapacity);
             stmt.setInt(5, totalCapacity);
-            stmt.execute();
+            stmt.executeUpdate();
 
             PreparedStatement stmt2=connection.prepareStatement("select currval('course_section_id_seq')");
             rs = stmt2.executeQuery();
@@ -119,9 +122,8 @@ public class ReferenceCourseService implements CourseService {
         ResultSet rs = null;
         int sectionClassId=-1;
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("course_section_class (section_id, instructor_id, day_of_week, week_list, class_begin, class_end, location) " +
-                     " VALUES(?,?,?,?,?,?,?)" +
-                     "ON conflict(courseId)  DO NOTHING;" , Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("insert into course_section_class (section_id, instructor_id, day_of_week, week_list, class_begin, class_end, location) " +
+                     " VALUES(?,?,?,?,?,?,?)" , Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, sectionId);
             stmt.setInt(2, instructorId);
             stmt.setInt(3, dayOfWeek.getValue());
@@ -162,7 +164,7 @@ public class ReferenceCourseService implements CourseService {
     @Override
     public void removeCourse(String courseId) {
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("delete from table course where id = ?", Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("delete from  course where id = ?", Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, courseId);
 
             stmt.execute();
@@ -181,7 +183,7 @@ public class ReferenceCourseService implements CourseService {
     @Override
     public void removeCourseSection(int sectionId) {
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("delete from table course_section where id = ?", Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("delete from course_section where id = ?", Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, sectionId);
 
             stmt.execute();
@@ -198,7 +200,7 @@ public class ReferenceCourseService implements CourseService {
     public void removeCourseSectionClass(int classId) {
 
         try (Connection connection = SQLDataSource.getInstance().getSQLConnection();
-             PreparedStatement stmt = connection.prepareStatement("delete from table course_section where id = ?", Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement stmt = connection.prepareStatement("delete from course_section_class where id = ?", Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, classId);
 
             stmt.execute();

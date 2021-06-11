@@ -139,7 +139,7 @@ public interface StudentService {
      *
      * To check whether prerequisite courses are available for current one, only check the
      * grade of prerequisite courses are >= 60 or PASS
-     *
+     * 
      * @param studentId
      * @param sectionId the id of CourseSection
      * @return See {@link cn.edu.sustech.cs307.service.StudentService.EnrollResult}
