@@ -36,20 +36,25 @@ public class ReferenceStudentService implements StudentService {
     }
 
     @Override
-    public List<CourseSearchEntry> searchCourse(int studentId, int semesterId, @Nullable String searchCid,
-                                                @Nullable String searchName, @Nullable String searchInstructor,
+    public List<CourseSearchEntry> searchCourse(int studentId, int semesterId,
+                                                @Nullable String searchCid, @Nullable String searchName, @Nullable String searchInstructor,
                                                 @Nullable DayOfWeek searchDayOfWeek, @Nullable Short searchClassTime,
-                                                @Nullable List<String> searchClassLocations, CourseType searchCourseType,
-                                                boolean ignoreFull, boolean ignoreConflict, boolean ignorePassed,
-                                                boolean ignoreMissingPrerequisites, int pageSize, int pageIndex) {
-        List<CourseSearchEntry>courseSearchResult = new LinkedList<>();
-        ResultSet rst=null;
-        try {Connection conn = SQLDataSource.getInstance().getSQLConnection();
-            PreparedStatement pStmt = conn.prepareStatement("select * from search_course(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) as (course_id varchar, course_name varchar, credit int, class_hour int, is_pf_grading bool, section_id int, section_name varchar, total_capacity int, left_capacity int,  class_id int, ins_id int, ins_name varchar, day_of_week int, week_list int, class_begin int, class_end int, location varchar)");
-
-            //sql = "select * from search_course(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) as (course_id varchar, course_name varchar, credit int, class_hour int, is_pf_grading bool, section_id int, section_name varchar, total_capacity int, left_capacity int,  class_id int, ins_id int, ins_name varchar, day_of_week int, week_list int, class_begin int, class_end int, location varchar)";
-
-            //pStmt = conn.prepareStatement(sql);
+                                                @Nullable List<String> searchClassLocations, CourseType searchCourseType, boolean ignoreFull,
+                                                boolean ignoreConflict, boolean ignorePassed, boolean ignoreMissingPrerequisites,
+                                                int pageSize, int pageIndex) {
+        List<CourseSearchEntry> courseSearchResult = new ArrayList<>();
+        CourseSearchEntry tempEntry;
+        CourseSectionClass tempClass;
+        short weekCnt;
+        int weekListNum, sType;
+        Connection conn = null;
+        PreparedStatement pStmt = null, conflictPStmt = null , stmt = null;
+        ResultSet conflictRst = null, rst = null, rst0 = null;
+        boolean stop;
+        try {
+            conn = SQLDataSource.getInstance().getSQLConnection();
+            pStmt = conn.prepareStatement(
+                    "select * from search_course(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) as (course_id varchar, course_name varchar, credit int, class_hour int, is_pf_grading bool, section_id int, section_name varchar, total_capacity int, left_capacity int,  class_id int, ins_id int, ins_name varchar, day_of_week int, week_list int, class_begin int, class_end int, location varchar)");
             pStmt.setInt(1, studentId);
             pStmt.setInt(2, semesterId);
             if (searchCid == null) {
@@ -83,7 +88,6 @@ public class ReferenceStudentService implements StudentService {
                 pStmt.setArray(8,
                         conn.createArrayOf("varchar", searchClassLocations.toArray(new String[0])));
             }
-            int sType=0;
             switch (searchCourseType) {
                 case ALL:
                     sType = 1;
@@ -100,6 +104,9 @@ public class ReferenceStudentService implements StudentService {
                 case PUBLIC:
                     sType = 5;
                     break;
+                default:
+                    sType = 0;
+                    break;
             }
             pStmt.setInt(9, sType);
             pStmt.setBoolean(10, ignoreFull);
@@ -109,12 +116,12 @@ public class ReferenceStudentService implements StudentService {
             pStmt.setInt(14, pageSize);
             pStmt.setInt(15, pageIndex);
             rst = pStmt.executeQuery();
-            PreparedStatement conflictPStmt = conn.prepareStatement(
-                    "select * from get_all_conflict_sections(?) as (sec_full_name varchar)");
+            conflictPStmt = conn.prepareStatement(
+                    "select * from get_conflict_sections(?, ?) as (sec_full_name varchar)");
             if (rst.next()) {
-                boolean stop = false;
+                stop = false;
                 while (!stop) {
-                    CourseSearchEntry tempEntry = new CourseSearchEntry();
+                    tempEntry = new CourseSearchEntry();
                     tempEntry.course = new Course();
                     tempEntry.sectionClasses = new HashSet<>();
                     tempEntry.section = new CourseSection();
@@ -129,23 +136,31 @@ public class ReferenceStudentService implements StudentService {
                     tempEntry.section.name = rst.getString(7);
                     tempEntry.section.totalCapacity = rst.getInt(8);
                     tempEntry.section.leftCapacity = rst.getInt(9);
-                    conflictPStmt.setInt(1, tempEntry.section.id);
-                    // used in searchCourse()
-                    ResultSet conflictRst = conflictPStmt.executeQuery();
+
+                    // get conflict sections
+                    conflictPStmt.setInt(1, studentId);
+                    conflictPStmt.setInt(2, tempEntry.section.id);
+                    conflictRst = conflictPStmt.executeQuery();
                     while (conflictRst.next()) {
-                        tempEntry.conflictCourseNames.add(conflictRst.getString(1));
+                        int sectonid = conflictRst.getInt(1);
+                        stmt = conn.prepareStatement("select get_name(?)");
+                        stmt.setInt(1,sectonid);
+                        rst0 = stmt.executeQuery();
+                        tempEntry.conflictCourseNames.add(rst0.getString(1));
                     }
                     conflictRst.close();
+                    rst0.close();
+                    // get classes
                     while (rst.getInt(6) == tempEntry.section.id) {
-                        CourseSectionClass tempClass = new CourseSectionClass();
+                        tempClass = new CourseSectionClass();
                         tempClass.instructor = new Instructor();
                         tempClass.weekList = new HashSet<>();
                         tempClass.id = rst.getInt(10);
                         tempClass.instructor.id = rst.getInt(11);
                         tempClass.instructor.fullName = rst.getString(12);
                         tempClass.dayOfWeek = DayOfWeek.of(rst.getInt(13));
-                        int weekListNum = rst.getInt(14);
-                        Short weekCnt = 0;
+                        weekListNum = rst.getInt(14);
+                        weekCnt = 0;
                         while (weekListNum > 0) {
                             weekCnt++;
                             if (weekListNum % 2 == 1) {
@@ -170,16 +185,27 @@ public class ReferenceStudentService implements StudentService {
             e.printStackTrace();
         } finally {
             try {
-                rst.close();
-                //pStmt.close();
-                //conn.close();
+                if (conflictRst != null) {
+                    conflictRst.close();
+                }
+                if (conflictPStmt != null) {
+                    conflictPStmt.close();
+                }
+                if (rst != null) {
+                    rst.close();
+                }
+                if (pStmt != null) {
+                    pStmt.close();
+                }
+                if (conn != null) {
+                    conn.close();
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
         return courseSearchResult;
     }
-
 
     @Override
     public EnrollResult enrollCourse(int studentId, int sectionId) {
@@ -264,22 +290,20 @@ public class ReferenceStudentService implements StudentService {
             };
             stmt.setInt(1, studentId);
             stmt.setInt(2, sectionId);
-            stmt.setInt(3, grade.when(cases));
+            if (grade == null) {
+                stmt.setNull(3, Types.INTEGER);
+            } else {
+                stmt.setInt(3, grade.when(cases));
+            }
             rst = stmt.executeQuery();
             if(rst.next()){
                 if(!rst.getBoolean(1)){
                     throw new IntegrityViolationException();
                 }
             }
+            rst.close();
         }catch (SQLException e){
             e.printStackTrace();
-        }finally {
-            try{
-                assert rst != null;
-                rst.close();
-            } catch (SQLException throwables) {
-                throwables.printStackTrace();
-            }
         }
     }
 
@@ -420,7 +444,7 @@ public class ReferenceStudentService implements StudentService {
         Instructor instructor = new Instructor();
         CourseTable.CourseTableEntry courseTableEntry = new CourseTable.CourseTableEntry();
         try(Connection conn = SQLDataSource.getInstance().getSQLConnection();
-            PreparedStatement stmt = conn.prepareStatement("select * from getCourseTable(? , ?) as (full_name varchar ,class_begin integer ,class_end integer ,location varchar ,instructor_id int ,instructor_name varchar ,day_of_week integer )")
+            PreparedStatement stmt = conn.prepareStatement("select * from getCoursetable(? , ?) as (full_name text ,class_begin integer ,class_end integer ,location varchar ,instructor_id int ,instructor_name varchar ,day_of_week integer )")
         ){
             stmt.setInt(1,studentId);
             stmt.setDate(2,date);
@@ -440,13 +464,6 @@ public class ReferenceStudentService implements StudentService {
             }
         } catch (SQLException throwables) {
             throwables.printStackTrace();
-        }finally {
-            try{
-                assert rst != null;
-                rst.close();
-            } catch (SQLException throwables) {
-                throwables.printStackTrace();
-            }
         }
         return courseTable;
     }
